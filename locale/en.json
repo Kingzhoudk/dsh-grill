@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Interrogation mode (Grill)",
+    "description": "Adds a switch to the composer tool row's left group in every conversation (after the permission selector and the plan chip). While on, the agent analyzes each request for ambiguity, missing information and contradictions, replies with concrete repair options and questions, and only plans or executes after every blocking question is resolved. A delegated subagent reports unresolved questions in its final result instead of asking the user."
+  }
+}

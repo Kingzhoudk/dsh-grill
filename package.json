@@ -1,0 +1,54 @@
+{
+  "name": "@local/dsh-grill",
+  "version": "1.0.0",
+  "private": true,
+  "description": "拷问 (Grill) mode: a per-conversation switch that makes the agent analyze every request for ambiguity, missing information and contradictions, ask focused questions with concrete fixes, and only plan or execute after every blocking question is resolved.",
+  "type": "module",
+  "main": "./index.js",
+  "scripts": {
+    "test": "node scripts/test.mjs"
+  },
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "scripts/test.mjs",
+    "tests/*.mts",
+    "tests/README.md"
+  ],
+  "icon": "./icon.svg",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "cordis",
+    "grill",
+    "拷问",
+    "clarification",
+    "prompt"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}

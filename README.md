@@ -162,3 +162,7 @@ new client module graph.
 Remove the bundle with the Harness plugin manager (`remove_bundle`,
 target `dsh-grill`); the profile patch selection and dependency entry are
 cleaned up by the manager.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

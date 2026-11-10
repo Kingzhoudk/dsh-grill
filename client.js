@@ -14,13 +14,13 @@
  * client package is imported.
  */
 window.__ModuleLoader__.load({
-  id: '@local/dsh-grill',
+  id: 'dsh-grill',
   factory(require) {
     const React = require('react')
     const h = React.createElement
 
     const NS = 'grill'
-    const PACKAGE_ID = '@local/dsh-grill'
+    const PACKAGE_ID = 'dsh-grill'
     const SWITCH_ID = 'grill-switch'
 
     const EN = {

@@ -69,7 +69,7 @@ The plugin row accepts two optional fields:
 
 ```yaml
 - id: grill
-  name: '@local/dsh-grill'
+  name: 'dsh-grill'
   config:
     section: |-
       ...custom model-facing protocol text...
@@ -91,11 +91,18 @@ text, and the effective protocol text is capped at 20000 characters.
 
 ## Install
 
-Install the bundle directory with the Harness plugin manager
-(`plugin_manager`, action `install_bundle`, target = this directory). The Host
-row activates through the live profile patch; the browser half is served as a
-client module and appears in the composer of every conversation after the page
-picks up the new client graph.
+Install the bundle from its git repository:
+
+```sh
+dsh plugin add github:Kingzhoudk/dsh-grill
+# or the explicit git spec
+dsh plugin add git+https://github.com/Kingzhoudk/dsh-grill.git
+```
+
+The plugin manager records the dependency and enables the bundle. The Host row
+activates through the live profile patch; the browser half is served as a client
+module and appears in the composer of every conversation after the page picks up
+the new client graph.
 
 The package declares `engines.dsh: ">=0.2.2-rc.1 <0.3.0"`, so the plugin manager
 refuses it on an incompatible runtime. The range is written explicitly because
@@ -109,15 +116,14 @@ path. `scripts/test.mjs` copies them into that checkout, runs both with `tsx`,
 and removes the scratch directory:
 
 ```bash
-cd /home/dk/test/plugins/dsh-grill
-DSH_CHECKOUT=/home/dk/study/deepseek-harness node scripts/test.mjs   # or: npm test
+# from this package
+DSH_CHECKOUT=/path/to/deepseek-harness node scripts/test.mjs   # or: DSH_CHECKOUT=... npm test
 ```
 
-`DSH_CHECKOUT` defaults to `/home/dk/study/deepseek-harness` and
-`DSH_GRILL_PLUGIN` to this package, so a hand-run copy inside the checkout still
-works unchanged. The runner exits non-zero when a script fails or the checkout
-lacks `tsx`, `jsdom`, or `@testing-library/react`. It prints
-`GRILL_HOST_INTEGRATION_OK` / `GRILL_CLIENT_OK` on success.
+`DSH_CHECKOUT` is required and must point at a deepseek-harness source checkout;
+`DSH_GRILL_PLUGIN` defaults to this package. The runner exits non-zero when a
+script fails or the checkout lacks `tsx`, `jsdom`, or `@testing-library/react`.
+It prints `GRILL_HOST_INTEGRATION_OK` / `GRILL_CLIENT_OK` on success.
 
 ## Verification
 
@@ -154,6 +160,5 @@ new client module graph.
 ## Uninstall
 
 Remove the bundle with the Harness plugin manager (`remove_bundle`,
-target `@local/dsh-grill`); the profile patch selection and dependency entry are
-cleaned up by the manager. The checkout at `/home/dk/test/plugins/dsh-grill` is
-left untouched.
+target `dsh-grill`); the profile patch selection and dependency entry are
+cleaned up by the manager.

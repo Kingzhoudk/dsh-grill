@@ -27,10 +27,12 @@ globalThis.Event = dom.window.Event
 globalThis.MouseEvent = dom.window.MouseEvent
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-// Absolute defaults keep a hand-run copy working; scripts/test.mjs sets both
-// variables so the same script runs against any checkout.
-const CHECKOUT = process.env.DSH_CHECKOUT ?? '/home/dk/study/deepseek-harness'
-const PLUGIN = process.env.DSH_GRILL_PLUGIN ?? '/home/dk/test/plugins/dsh-grill'
+// scripts/test.mjs sets both variables; a hand-run copy must export them too.
+const CHECKOUT = process.env.DSH_CHECKOUT
+const PLUGIN = process.env.DSH_GRILL_PLUGIN
+if (CHECKOUT === undefined || PLUGIN === undefined) {
+  throw new Error('set DSH_CHECKOUT (a deepseek-harness checkout) and DSH_GRILL_PLUGIN (this package)')
+}
 
 const testingLibraryDir = fs.realpathSync(`${CHECKOUT}/node_modules/@testing-library/react`)
 const requireClient = createRequire(`${testingLibraryDir}/package.json`)
@@ -46,7 +48,7 @@ dom.window.__ModuleLoader__ = {
 }
 await import(pathToFileURL(`${PLUGIN}/client.js`).href)
 assert.ok(registration !== undefined, 'bundle registered a module')
-assert.equal(registration.id, '@local/dsh-grill')
+assert.equal(registration.id, 'dsh-grill')
 
 const requireForBundle = (name) => {
   if (name === 'react') return React

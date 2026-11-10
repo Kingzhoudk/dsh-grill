@@ -15,7 +15,7 @@
  *   DSH_CHECKOUT=/path/to/checkout node scripts/test.mjs
  *
  * Environment:
- *   DSH_CHECKOUT      DSH source checkout (default /home/dk/study/deepseek-harness)
+ *   DSH_CHECKOUT      DSH source checkout (required)
  *   DSH_GRILL_PLUGIN  plugin directory the tests load (default: this package)
  *
  * Exit status is non-zero when a prerequisite is missing or any script fails.
@@ -26,7 +26,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const pluginDir = dirname(dirname(fileURLToPath(import.meta.url)))
-const checkout = process.env.DSH_CHECKOUT ?? '/home/dk/study/deepseek-harness'
+const checkout = process.env.DSH_CHECKOUT
 const tests = ['host-integration.mts', 'client-integration.mts']
 
 /** Print a failure and exit non-zero. */
@@ -35,8 +35,8 @@ function fail(message) {
   process.exit(1)
 }
 
-if (!existsSync(join(checkout, 'package.json'))) {
-  fail(`no DSH checkout at "${checkout}" — set DSH_CHECKOUT to a deepseek-harness checkout`)
+if (checkout === undefined || !existsSync(join(checkout, 'package.json'))) {
+  fail('set DSH_CHECKOUT to a deepseek-harness source checkout')
 }
 const prerequisites = [
   ['tsx', join(checkout, 'node_modules', 'tsx')],

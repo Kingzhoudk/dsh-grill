@@ -8,8 +8,8 @@ ignores `NODE_PATH` for ESM).
 The supported way to run them is the packaged runner:
 
 ```bash
-cd /home/dk/test/plugins/dsh-grill
-DSH_CHECKOUT=/home/dk/study/deepseek-harness node scripts/test.mjs   # or: npm test
+# from this package
+DSH_CHECKOUT=/path/to/deepseek-harness node scripts/test.mjs   # or: DSH_CHECKOUT=... npm test
 ```
 
 `scripts/test.mjs` creates a scratch directory **inside** the checkout, copies
@@ -17,20 +17,20 @@ both scripts there, runs them with `node --import tsx/esm`, removes the
 directory, and exits non-zero if either script fails or the checkout is missing
 `tsx`, `jsdom`, or `@testing-library/react`.
 
-- `DSH_CHECKOUT` — checkout to run against (default
-  `/home/dk/study/deepseek-harness`).
+- `DSH_CHECKOUT` — checkout to run against (required; no default).
 - `DSH_GRILL_PLUGIN` — plugin directory the scripts load (default: this
-  package).
+  package, set by the runner).
 
-Both scripts keep those absolute paths as defaults, so the manual flow below
-still works unchanged:
+Both scripts read those absolute paths from the environment, so a hand-run copy
+inside the checkout works when both are exported:
 
 ```bash
-# from the checkout root (/home/dk/study/deepseek-harness for this profile)
+# from the checkout root
+pkg=/path/to/dsh-grill
 mkdir -p .grill-test
-cp /home/dk/test/plugins/dsh-grill/tests/*.mts .grill-test/
-node --import tsx/esm .grill-test/host-integration.mts
-node --import tsx/esm .grill-test/client-integration.mts
+cp "$pkg"/tests/*.mts .grill-test/
+DSH_CHECKOUT=$PWD DSH_GRILL_PLUGIN=$pkg node --import tsx/esm .grill-test/host-integration.mts
+DSH_CHECKOUT=$PWD DSH_GRILL_PLUGIN=$pkg node --import tsx/esm .grill-test/client-integration.mts
 rm -rf .grill-test
 ```
 

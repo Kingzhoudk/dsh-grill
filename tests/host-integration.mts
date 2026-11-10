@@ -25,10 +25,12 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import CommandsRuntime from '@deepseek-ai/dsh-commands'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 
-// Absolute defaults keep a hand-run copy working; scripts/test.mjs sets both
-// variables so the same script runs against any checkout.
-const CHECKOUT = process.env.DSH_CHECKOUT ?? '/home/dk/study/deepseek-harness'
-const PLUGIN = process.env.DSH_GRILL_PLUGIN ?? '/home/dk/test/plugins/dsh-grill'
+// scripts/test.mjs sets both variables; a hand-run copy must export them too.
+const CHECKOUT = process.env.DSH_CHECKOUT
+const PLUGIN = process.env.DSH_GRILL_PLUGIN
+if (CHECKOUT === undefined || PLUGIN === undefined) {
+  throw new Error('set DSH_CHECKOUT (a deepseek-harness checkout) and DSH_GRILL_PLUGIN (this package)')
+}
 const { MockAdapter, textResponse } = await import(
   pathToFileURL(join(CHECKOUT, 'packages/core/agent-loop/tests/mock-adapter.ts')).href
 )

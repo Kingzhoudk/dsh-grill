@@ -1,6 +1,6 @@
 {
   "name": "dsh-grill",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "拷问 (Grill) mode: a per-conversation switch that makes the agent analyze every request for ambiguity, missing information and contradictions, ask focused questions with concrete fixes, and only plan or execute after every blocking question is resolved.",
   "type": "module",

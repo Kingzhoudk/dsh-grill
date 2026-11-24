@@ -30,6 +30,8 @@ window.__ModuleLoader__.load({
       'title.on': 'Interrogation mode on — every request is analyzed and clarified before execution',
       'title.off': 'Interrogation mode off — press to make the agent analyze every request and clarify ambiguity, gaps and contradictions before acting',
       'title.busy': 'Switching interrogation mode…',
+      'title.pending': 'Reading this conversation\'s interrogation state…',
+      'aria.pending': 'Interrogation state is still loading for this conversation',
       'error.failed': 'Could not switch interrogation mode',
       'error.unavailable': 'This conversation cannot run the /grill command',
     }
@@ -41,6 +43,8 @@ window.__ModuleLoader__.load({
       'title.on': '拷问模式已开启 — 每个请求都会先分析并澄清，再执行',
       'title.off': '拷问模式已关闭 — 点击后，每个请求都会先分析并澄清模糊、缺失与矛盾，再执行',
       'title.busy': '正在切换拷问模式…',
+      'title.pending': '正在读取本会话的拷问状态…',
+      'aria.pending': '本会话拷问状态尚未就绪',
       'error.failed': '切换拷问模式失败',
       'error.unavailable': '当前会话无法执行 /grill 命令',
     }
@@ -123,7 +127,12 @@ window.__ModuleLoader__.load({
       // so a missing optional prop degrades the switch instead of the composer.
       const t = typeof props.t === 'function' ? props.t : key => key
       const projection = typeof useProjection === 'function' ? useProjection('grill') : undefined
-      const active = projection !== undefined && projection.active === true
+      // Before the first projection frame the switch renders as off but stays
+      // usable: the click sends `/grill on`, which is idempotent, so an early
+      // press can never disable a Session whose state was merely not delivered
+      // yet. The pending title/aria-busy say the state is not final.
+      const known = projection !== undefined && projection !== null
+      const active = projection !== undefined && projection !== null && projection.active === true
       const removed = typeof useSession === 'function' && useSession(snapshot => snapshot.removed) === true
       // Executing a slash command is the `commands/execute` endpoint, not
       // `session/prompt`: in a shared Session a viewer may prompt the source but
@@ -154,7 +163,8 @@ window.__ModuleLoader__.load({
 
       const title = error !== null
         ? `${t('error.failed')}: ${error}`
-        : pending ? t('title.busy') : t(active ? 'title.on' : 'title.off')
+        : !known ? t('title.pending')
+          : pending ? t('title.busy') : t(active ? 'title.on' : 'title.off')
 
       const toggle = () => {
         if (pending || removed || commandDenied) return
@@ -212,6 +222,7 @@ window.__ModuleLoader__.load({
             role: 'switch',
             'aria-checked': active,
             'aria-label': t(active ? 'aria.on' : 'aria.off'),
+            'aria-busy': !known || pending ? true : undefined,
             title,
             disabled: pending || removed || commandDenied,
             className: 'dsh-grill-toggle',

@@ -9,7 +9,10 @@
  *     prompt,
  *  4. repeats for `/grill off` and asserts the section is gone,
  *  5. rejects an invalid argument without changing state,
- *  6. checks the pure projection fold directly (resume/replay semantics).
+ *  6. checks the pure projection fold directly (resume/replay semantics),
+ *  7. checks `/grill status|toggle` and the effective-state view (spawned-child
+ *     inheritance, explicit-off precedence, `defaultActive`),
+ *  8. checks the row config grows the environment exception without duplicates.
  */
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
@@ -68,7 +71,7 @@ await ctx.plugin(CommandsRuntime)
 await ctx.plugin(AgentLoop, { agents: [] })
 await ctx.plugin(Grill)
 
-const adapter = new MockAdapter([textResponse('ok'), textResponse('ok'), textResponse('ok')])
+const adapter = new MockAdapter([textResponse('ok'), textResponse('ok'), textResponse('ok'), textResponse('ok')])
 ctx.llm.registerAdapter(['mock'], adapter)
 const agent = await ctx.agentLoop.create(SessionId('grill-test'), { provider: 'mock', model: 'mock' })
 const signal = new AbortController().signal
@@ -123,6 +126,36 @@ assert.equal(Grill.grillProjection.wire.view(init), Grill.grillProjection.wire.v
 assert.deepEqual(Grill.parseGrillArgument(' OFF '), false)
 assert.equal(Grill.parseGrillArgument('maybe'), undefined)
 
+// 7. status and toggle: the same command surface every non-Web environment
+//    (terminal, ACP/SDK, IM, headless) uses when no composer switch exists.
+const onAgain = await ctx.commands.execute(agent, '/grill on', [], signal)
+assert.equal(onAgain?.result.kind, 'success')
+const statusOn = await ctx.commands.execute(agent, '/grill status', [], signal)
+assert.equal(statusOn?.result.kind, 'success')
+assert.match(statusOn.result.text, /Interrogation mode is ON/u)
+const toggled = await ctx.commands.execute(agent, '/grill toggle', [], signal)
+assert.equal(toggled?.result.kind, 'success')
+assert.deepEqual(ctx.sessionProjections.snapshot(agent.session).values.grill, { active: false }, 'toggle flips the durable state')
+const statusOff = await ctx.commands.execute(agent, '/grill status', [], signal)
+assert.match(statusOff.result.text, /Interrogation mode is OFF/u)
+
+// 8. effective-state view: inheritance, explicit-over precedence, configured default
+const view = Grill.createGrillView({})
+let durable = { active: false }
+view.bind(() => durable)
+assert.equal(view.isActive({ id: 'child' }), false, 'a fresh child starts inactive')
+view.inherit('child')
+assert.equal(view.isActive({ id: 'child' }), true, 'a spawned child inherits an active parent')
+view.remember({ id: 'child' }, false)
+assert.equal(view.isActive({ id: 'child' }), false, 'an explicit off outranks inheritance')
+assert.equal(view.isActive({ id: 'child' }), false, 'and it stays off once the fold agrees')
+durable = { active: true }
+assert.equal(view.isActive({ id: 'parent' }), true, 'the durable fold is authoritative')
+const defaultOn = Grill.createGrillView({ defaultActive: true })
+assert.equal(defaultOn.isActive({ id: 'fresh' }), true, 'defaultActive preselects the mode')
+assert.deepEqual(Grill.createGrillProjection({ defaultActive: true }).init(), { active: true, running: null })
+assert.deepEqual(Grill.createGrillProjection().init(), { active: false, running: null })
+
 // 6. row config: invalid values fail loud, the subagent exception survives a
 //    custom `section`, and it is the default for the built-in text.
 const builtIn = Grill.resolveGrillConfig({})
@@ -133,10 +166,42 @@ const custom = Grill.resolveGrillConfig({ section: 'custom protocol' })
 assert.ok(custom.section.startsWith('custom protocol'), 'custom section replaces the default text')
 assert.ok(custom.section.includes('DELEGATED_CALLER'), 'custom section still carries the subagent exception')
 assert.equal(Grill.resolveGrillConfig({ section: '   ' }).section, builtIn.section, 'blank section falls back to the default')
-assert.equal(Grill.resolveGrillConfig({ section: 'custom', appendSubagentNote: false }).section, 'custom', 'the exception can be opted out')
+const bare = Grill.resolveGrillConfig({ section: 'custom', appendSubagentNote: false, appendEnvironmentNote: false })
+assert.equal(bare.section, 'custom', 'both appended exceptions can be opted out')
+assert.equal(Grill.resolveGrillConfig({ section: 'custom', appendSubagentNote: false }).section.includes('Environment fallback'), true,
+  'opting out of the subagent exception keeps the environment one')
+assert.ok(builtIn.section.includes('NO_PROVIDER'), 'default protocol carries the no-human environment exception')
+assert.equal(builtIn.appendEnvironmentNote, true)
+assert.equal(builtIn.defaultActive, false, 'the mode stays off by default')
+assert.ok(!Grill.resolveGrillConfig({ appendEnvironmentNote: false }).section.includes('NO_PROVIDER'),
+  'the environment exception can be opted out')
+const envOwn = Grill.resolveGrillConfig({ section: 'custom NO_PROVIDER text' })
+assert.ok(!envOwn.section.includes('Environment fallback'), 'an author-supplied environment exception is not duplicated')
+assert.ok(envOwn.section.includes('DELEGATED_CALLER'), 'the subagent exception is still appended')
 assert.throws(() => Grill.resolveGrillConfig({ section: 42 }), TypeError, 'non-string section is rejected')
+assert.throws(() => Grill.resolveGrillConfig({ defaultActive: 'yes' }), TypeError, 'non-boolean defaultActive is rejected')
+assert.throws(() => Grill.resolveGrillConfig({ appendEnvironmentNote: 1 }), TypeError, 'non-boolean appendEnvironmentNote is rejected')
 assert.throws(() => Grill.resolveGrillConfig({ section: '', bogus: true }), /unknown config key/u, 'unknown keys are rejected')
 assert.throws(() => Grill.resolveGrillConfig({ section: 'x'.repeat(20_001) }), RangeError, 'oversized section is rejected')
+
+// 9. a spawned subagent whose own log holds no /grill event inherits an active
+//    parent, and the protocol reaches the child's model request.
+const parentOn = await ctx.commands.execute(agent, '/grill on', [], signal)
+assert.equal(parentOn?.result.kind, 'success')
+const child = await ctx.agentLoop.create(
+  SessionId('grill-child'),
+  { provider: 'mock', model: 'mock' },
+  { parentSession: agent.session.id, origin: 'subagent' },
+)
+const deadline = Date.now() + 2000
+while (Date.now() < deadline) {
+  await new Promise(resolve => setTimeout(resolve, 20))
+  if (ctx.sessionProjections.snapshot(agent.session).values.grill?.active === true) break
+}
+child.followup(createUserMessage({ content: [{ type: 'text', text: '子任务' }], source: { kind: 'user' } }))
+await waitForIdle(ctx, child)
+const childPrompt = systemText(adapter.requests[adapter.requests.length - 1])
+assert.ok(childPrompt.includes(MARKER), 'a spawned subagent inherits interrogation mode from its parent')
 
 await ctx.dispose?.()
 console.log('GRILL_HOST_INTEGRATION_OK')

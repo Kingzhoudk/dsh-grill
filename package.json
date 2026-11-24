@@ -1,8 +1,8 @@
 {
   "name": "dsh-grill",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
-  "description": "拷问 (Grill) mode: a per-conversation switch that makes the agent analyze every request for ambiguity, missing information and contradictions, ask focused questions with concrete fixes, and only plan or execute after every blocking question is resolved.",
+  "description": "拷问 (Grill) mode: a per-conversation switch and slash command that makes the agent analyze every request for ambiguity, missing information and contradictions, ask focused questions with concrete fixes, and only plan or execute after every blocking question is resolved. Works in Web/Desktop, IM, ACP/SDK and headless environments.",
   "type": "module",
   "main": "./index.js",
   "scripts": {

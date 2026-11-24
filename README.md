@@ -31,32 +31,65 @@ acted on rather than re-planned.
 
 ## How it works
 
-- The mode is **per Session and log-derived**. `/grill on` and `/grill off` are
-  ordinary slash commands; a `grill` session projection folds the existing
-  `command/run` / `command/done` events, so resume, fork and replay restore the
-  switch position without any custom session event type.
+- The mode is **per Session and log-derived**. `/grill on`, `/grill off`,
+  `/grill toggle` and `/grill status` are ordinary slash commands; a `grill`
+  session projection folds the existing `command/run` / `command/done` events,
+  so resume, fork and replay restore the switch position without any custom
+  session event type. `toggle` is resolved inside the fold from the state it
+  applies to, so replaying `toggle` twice lands where the user saw it land.
 - While the folded state is active, the host contributes the `grill:policy`
   prompt section to every model request of that Session (placed just after the
   plan-mode policy section). Inactive Sessions carry no extra prompt text.
 - The composer switch is only a surface: clicking it executes `/grill on` or
   `/grill off` through the same command path, and the projection frame updates
   the switch. There is no separate client-side mode state.
-- The command is also usable directly: type `/grill`, `/grill on` or
-  `/grill off` in any conversation. `/grill` with no argument turns the mode
-  **on** (it never toggles), and there is no `status` subcommand.
+- The command is also usable directly: type `/grill`, `/grill on`,
+  `/grill off`, `/grill toggle` or `/grill status` in any conversation.
+  `/grill` with no argument turns the mode **on** (only `toggle` flips it).
 - **Subagents.** A forked subagent is seeded with the parent's log prefix, so an
-  enabled mode reaches it and the protocol applies there too. A delegated child
-  cannot ask a human — its `ask_user_question` is refused with
-  `DELEGATED_CALLER` — so the protocol carries a subagent exception that turns a
-  blocking question into "report it in your final result". That exception is
-  appended to the built-in text and to any custom `section` (see Configuration).
+  enabled mode reaches it and the protocol applies there too. A *spawned*
+  subagent starts from a fresh log with no `/grill` event of its own, so the
+  host inherits an active parent through the parent's live agent or its durable
+  projection — that inheritance survives a restart. An explicit `/grill off` in
+  the child outranks the inherited value. A delegated child cannot ask a human
+  (its `ask_user_question` is refused with `DELEGATED_CALLER`), so the protocol
+  carries a subagent exception that turns a blocking question into "report it in
+  your final result". That exception is appended to the built-in text and to any
+  custom `section` (see Configuration).
+
+## Environments without a composer
+
+The composer switch is only a surface; the host half needs nothing but a command
+registry and a system-prompt section, so the mode is available in every DSH
+environment:
+
+| Environment | How the mode is selected |
+| --- | --- |
+| Web / Desktop | the composer switch, or any `/grill …` command |
+| IM relay (Feishu/WeChat/…) | the `/grill …` command in the chat; that plugin's question cards answer `ask_user_question` |
+| ACP / SDK client | the `/grill …` command over the session's command endpoint |
+| `dsh headless`, scheduled prompt | `defaultActive: true` on the row (nobody can type a command first), or a resumed session that already carries the state |
+
+`ask_user_question` is not always answerable: a headless one-shot run, an ACP/SDK
+client, a scheduled task or a preset without the tool rejects it with
+`NO_PROVIDER`, and a delegated child gets `DELEGATED_CALLER`. The host therefore
+appends an **environment exception** to the protocol: the agent writes the
+blocking question and its recommended option into the answer, continues on the
+recommendation when the work is reversible, and stops before an irreversible
+step so the next message can approve it. The exception is appended to the
+built-in text and to any custom `section` unless that section already names
+`NO_PROVIDER` (see Configuration).
+
+When a plan-mode policy section is present, that policy owns the plan-and-stop
+mechanism: grill keeps its analysis and questions, folds its plan requirements
+into the submitted plan, and asks for approval once instead of twice.
 
 ## Bundle layout
 
 | File | Role |
 | --- | --- |
 | `index.js` | Host half: projection unit, `/grill` command, `grill:policy` prompt section, row-config validation |
-| `client.js` | Browser half: the composer switch registered in `conversation.input.left` |
+| `client.js` | Browser half (Web/Desktop): the composer switch registered in `conversation.input.left` |
 | `cordis.patch.yml` | Inserts the Host row into the profile |
 | `locale/*.json` | Plugin Manager metadata (title/description) |
 | `icon.svg` | Original artwork for the plugin inventory |
@@ -65,7 +98,7 @@ acted on rather than re-planned.
 
 ## Configuration
 
-The plugin row accepts two optional fields:
+The plugin row accepts four optional fields:
 
 ```yaml
 - id: grill
@@ -74,6 +107,8 @@ The plugin row accepts two optional fields:
     section: |-
       ...custom model-facing protocol text...
     appendSubagentNote: true
+    appendEnvironmentNote: true
+    defaultActive: false
 ```
 
 `section` replaces the default prompt protocol; leave it out (or blank) to use
@@ -84,10 +119,18 @@ it to `false` only when the custom `section` already carries its own delegated
 agent rule; an author-supplied text that names `DELEGATED_CALLER` is detected
 and left alone.
 
+`appendEnvironmentNote` (default `true`) appends the environment exception
+described above, on the same terms as the subagent one: a custom `section` that
+already names `NO_PROVIDER` is left alone, and setting the flag to `false` opts
+out. `defaultActive` (default `false`) starts every Session in interrogation
+mode, which is how a one-shot environment preselects the mode; `/grill off`
+still turns it off, and the choice is durable per Session.
+
 Invalid configuration fails the read at plugin load instead of being ignored:
-`section` and `appendSubagentNote` must have their declared types, unknown keys
-are rejected with the key names, a blank `section` falls back to the built-in
-text, and the effective protocol text is capped at 20000 characters.
+`section` must be a string, the two append flags and `defaultActive` must be
+booleans, unknown keys are rejected with the key names, a blank `section` falls
+back to the built-in text, and the effective protocol text is capped at 20000
+characters.
 
 ## Install
 
@@ -134,10 +177,14 @@ Both halves were exercised before delivery and are re-exercised by `npm test`:
   with the plugin mounted. `/grill on` commits through the real command
   executor and publishes `{ active: true }` on the client-visible `grill`
   projection; the next model request's system prompt carries the protocol (and
-  its subagent exception); `/grill off` removes it; an invalid argument errors
-  without changing state. The fold is checked directly for replay safety and
-  reference stability, and the row-config validation is checked for type,
-  unknown-key, and size rejection.
+  its subagent and environment exceptions); `/grill off` removes it; an invalid
+  argument errors without changing state; `/grill status` reports the effective
+  state and `/grill toggle` flips the durable one. The fold is checked directly
+  for replay safety, `toggle` resolution and reference stability; the state view
+  is checked for spawned-child inheritance and explicit-off precedence; a real
+  spawned subagent created on the host is shown to inherit the mode and receive
+  the protocol; and the row config is checked for type, unknown-key, size and
+  duplicate-marker rejection.
 - **Client** — the real `client.js` bundle is loaded through a stand-in
   `window.__ModuleLoader__` and the registered slot component mounted with the
   Harness React instance: it renders `role="switch"` in both states, clicking
@@ -155,7 +202,10 @@ Both halves were exercised before delivery and are re-exercised by `npm test`:
 Not verified without browser control: the rendered pixels (exact spacing and
 light/dark appearance) and a literal mouse click in the running page. If an
 already-open tab does not show the switch, refresh the page once to pick up the
-new client module graph.
+new client module graph. Non-Web environments were not booted here: the host
+half is exercised directly (command registry, projection, prompt assembly), and
+the environment exception is asserted in the prompt text, but no live IM,
+ACP/SDK or headless run is part of this suite.
 
 ## Uninstall
 

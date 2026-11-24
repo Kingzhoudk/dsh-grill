@@ -184,6 +184,19 @@ await act(async () => { settle({ ok: false, error: { code: 'LATE', message: 'lat
 assert.ok(!(race.getByRole('switch').getAttribute('title') ?? '').includes('late failure'), 'a stale response is dropped')
 cleanup()
 
+// Before the first projection frame the switch says so in its title/aria-busy
+// but stays clickable: the click sends `/grill on`, which is idempotent.
+cleanup()
+ctx.remote.commands.execute = (...args) => { executeCalls.push(args); return Promise.resolve({ ok: true, value: { commandId: 'cmd-3', result: { kind: 'success' } } }) }
+const early = render(React.createElement(entry.component, props({ props: { useProjection: undefined } })))
+const earlySwitch = early.getByRole('switch')
+assert.equal(earlySwitch.getAttribute('title'), 'title.pending', 'an undelivered projection is reported as pending')
+assert.equal(earlySwitch.getAttribute('aria-busy'), 'true')
+assert.equal(earlySwitch.disabled, false, 'the switch stays usable before the first frame')
+await act(async () => { fireEvent.click(earlySwitch) })
+assert.deepEqual(executeCalls[executeCalls.length - 1], ['session-1', '/grill on', []], 'an early press turns the mode on, never off')
+cleanup()
+
 // Missing optional seats must not blank the composer slot entry.
 cleanup()
 const bare = render(React.createElement(entry.component, { sessionId: 's2' }))
